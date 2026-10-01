@@ -55,6 +55,12 @@
     height: 3rem;
 }
 
+.preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .button-row {
     display: flex;
     justify-content: flex-end;
@@ -271,7 +277,7 @@
 .navigation {
     flex-grow: 1;
 }
-    
+
 .topic-item {
     display: flex;
     gap: 8px;
@@ -282,7 +288,7 @@
     line-height: 1.5rem;
     cursor: pointer;
 }
-    
+
 .topic-item.active {
     background-color: $looks-light-transparent;
     color: $looks-secondary;
@@ -470,8 +476,79 @@
     background: none;
 }
 
+.categoryColorLabel {
+    gap: 0.33rem;
+    width: 100%;
+}
+
+.deleteButton {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.categoryColorLabel:hover .deleteButton {
+    opacity: 1;
+}
+
 .category-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem 0.25rem;
+    gap: 0.5rem;
+}
+
+.label-contrast-preview {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.label-contrast-preview-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid $ui-black-transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: "Helvetica Neue", Helvetica, sans-serif;
+    line-height: 1;
+}
+
+.section {
+    margin: 0.5rem 0 0 0;
+}
+
+.section-title {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-dropdown-caret {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font: inherit;
+    font-weight: bold;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.section-divider {
+    flex-grow: 1;
+    margin-left: 1rem;
+    border-top: 1px dashed $ui-tertiary;
+}
+
+.section-body {
+    margin-top: 0.25rem;
 }

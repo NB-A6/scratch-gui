@@ -1,3 +1,4 @@
+/* eslint-disable react/jsx-indent */
 /* eslint-disable react/jsx-no-bind */
 /* eslint-disable max-len */
 import {defineMessages, FormattedMessage, intlShape, injectIntl} from 'react-intl';
@@ -36,6 +37,8 @@ import {
 import {setHiddenCategories} from '../../reducers/hidden-categories';
 import dropdownCaret from '../menu-bar/dropdown-caret.svg';
 import ColorPicker from '../nb-fancy-color-picker/color-picker.jsx';
+import DeleteButton from '../delete-button/delete-button.jsx';
+import {BLOCK_SHAPE_PRESETS, getBlockShape} from '../../lib/nb-custom-block-shape';
 
 const messages = defineMessages({
     title: {
@@ -76,6 +79,14 @@ const messages = defineMessages({
         id: 'nb.editorSettings.versionControlSection',
         defaultMessage: 'Version Control'
     },
+    canvasSizeMultiplier: {
+        id: 'nb.editorSettings.canvasSizeMultiplier',
+        defaultMessage: 'Canvas size multiplier:'
+    },
+    canvasSizeMultiplierHelp: {
+        id: 'nb.editorSettings.canvasSizeMultiplierHelp',
+        defaultMessage: 'How large the canvas is in the paint editor relative to the stage.'
+    },
     keymap: {
         id: 'nb.editorSettings.keymapSection',
         defaultMessage: 'Keymap'
@@ -91,6 +102,58 @@ const messages = defineMessages({
     resetTabsVisibility: {
         id: 'nb.editorSettings.resetTabsVisibility',
         defaultMessage: 'Reset to defaults'
+    },
+    customBlockShape: {
+        id: 'nb.editorSettings.customBlockShape',
+        defaultMessage: 'Customizable block shape'
+    },
+    customBlockShapeHelp: {
+        id: 'nb.editorSettings.customBlockShapeHelp',
+        defaultMessage: 'Adjust the padding, corner radius, notch height, and field height of blocks.'
+    },
+    paddingSize: {
+        id: 'nb.editorSettings.paddingSize',
+        defaultMessage: 'Padding size (50-200%):'
+    },
+    paddingSizeHelp: {
+        id: 'nb.editorSettings.paddingSizeHelp',
+        defaultMessage: 'Controls the overall size and spacing of blocks.'
+    },
+    cornerSize: {
+        id: 'nb.editorSettings.cornerSize',
+        defaultMessage: 'Corner size (0-300%):'
+    },
+    cornerSizeHelp: {
+        id: 'nb.editorSettings.cornerSizeHelp',
+        defaultMessage: 'Controls how rounded the corners of blocks are.'
+    },
+    maxCornerRadius: {
+        id: 'nb.editorSettings.maxCornerRadius',
+        defaultMessage: 'Max corner radius (1x-12x):'
+    },
+    maxCornerRadiusHelp: {
+        id: 'nb.editorSettings.maxCornerRadiusHelp',
+        defaultMessage: 'Sets an upper limit on the corner radius as a multiple of the base corner size, used by round output blocks.'
+    },
+    notchSize: {
+        id: 'nb.editorSettings.notchSize',
+        defaultMessage: 'Notch height (0-150%):'
+    },
+    notchSizeHelp: {
+        id: 'nb.editorSettings.notchSizeHelp',
+        defaultMessage: 'Controls how tall the notches and bumps that let blocks snap together are.'
+    },
+    fieldHeight: {
+        id: 'nb.editorSettings.fieldHeight',
+        defaultMessage: 'Field height (75-150%):'
+    },
+    fieldHeightHelp: {
+        id: 'nb.editorSettings.fieldHeightHelp',
+        defaultMessage: 'Controls the height of text inputs and dropdowns inside blocks, independent of overall padding.'
+    },
+    presets: {
+        id: 'nb.editorSettings.blockShapePresets',
+        defaultMessage: 'Presets'
     }
 });
 
@@ -117,6 +180,41 @@ const toolboxCategories = [
 ];
 
 const BufferedInput = BufferedInputHOC(Input);
+
+const hexToRgb = hex => {
+    const h = hex.replace('#', '');
+    return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16)
+    };
+};
+
+const rgbToHex = ({r, g, b}) =>
+    `#${[r, g, b]
+        .map(v => Math.round(Math.max(0, Math.min(255, v)))
+            .toString(16)
+            .padStart(2, '0')
+        )
+        .join('')}`;
+
+const mixTowardWhite = (hex, fraction) => {
+    const {r, g, b} = hexToRgb(hex);
+    return rgbToHex({
+        r: r + ((255 - r) * fraction),
+        g: g + ((255 - g) * fraction),
+        b: b + ((255 - b) * fraction)
+    });
+};
+
+const colorBrightness = hex => {
+    const {r, g, b} = hexToRgb(hex);
+    return ((299 * r) + (587 * g) + (114 * b)) / 1000;
+};
+
+const labelContrastDefault = 190;
+const labelContrastShades = [-0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.75, 0.9];
+const labelDarkColor = '#575E75';
 
 const LearnMore = props => (
     <React.Fragment>
@@ -216,14 +314,104 @@ BooleanSetting.propTypes = {
     label: PropTypes.node.isRequired
 };
 
+const Section = ({title, children}) => {
+    const [expanded, setExpanded] = useState(true);
+    return (
+        <div className={styles.section}>
+            <div
+                className={styles.sectionTitle}
+                // eslint-disable-next-line react/jsx-no-bind
+                onClick={() => setExpanded(e => !e)}
+            >
+                <span>{title}</span>
+                <button className={styles.sectionDropdownCaret}>
+                    <img
+                        className={classNames(styles.collapseArrow, {
+                            [styles.collapseArrowExpanded]: expanded
+                        })}
+                        src={dropdownCaret}
+                        draggable={false}
+                    />
+                </button>
+                <div className={styles.sectionDivider} />
+            </div>
+            {expanded && (
+                <div className={styles.sectionBody}>
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+Section.propTypes = {
+    title: PropTypes.node.isRequired,
+    children: PropTypes.node
+};
+
+const CollapsibleSetting = ({label, help, children}) => {
+    const [expanded, setExpanded] = useState(false);
+    return (
+        <Setting
+            help={help}
+            primary={
+                <button
+                    className={classNames(styles.label, styles.collapseButton)}
+                    onClick={() => setExpanded(e => !e)}
+                >
+                    {label}
+                    <img
+                        className={classNames(styles.collapseArrow, {
+                            [styles.collapseArrowExpanded]: expanded
+                        })}
+                        src={dropdownCaret}
+                    />
+                </button>
+            }
+            secondary={
+                expanded && children
+            }
+        />
+    );
+};
+CollapsibleSetting.propTypes = {
+    label: PropTypes.node.isRequired,
+    help: PropTypes.node,
+    children: PropTypes.node
+};
+
+const LabelContrastPreview = ({baseColor, threshold}) => {
+    const currentThreshold = typeof threshold === 'undefined' || threshold === null ? labelContrastDefault : threshold;
+    return (
+        <div className={styles.labelContrastPreview}>
+            {labelContrastShades.map((fraction, index) => {
+                const colour = mixTowardWhite(baseColor, fraction);
+                const darkText = colorBrightness(colour) >= currentThreshold;
+                return (
+                    <div
+                        key={index}
+                        className={styles.labelContrastPreviewCircle}
+                        style={{
+                            backgroundColor: colour,
+                            color: darkText ? labelDarkColor : '#ffffff'
+                        }}
+                    >
+                        {'Aa'}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+LabelContrastPreview.propTypes = {
+    baseColor: PropTypes.string.isRequired,
+    threshold: PropTypes.number
+};
+
 const EditorSettingsModal = props => {
     const [selectedSectionIndex, setSelectedSectionIndex] = useState(props.activeTab ?? 0);
     const [windchimeOptOut, setWindchimeOptOut] = useState(localStorage.getItem('tw:windchime_opt_out') === 'true');
     const [dirty, setDirty] = useState(false);
-    const [categoriesExpanded, setCategoriesExpanded] = useState(false);
     const [blockColors, setBlockColors] = useState(loadBlockColors);
-    const [blockColorsExpanded, setBlockColorsExpanded] = useState(false);
-    const [tabsExpanded, setTabsExpanded] = useState(false);
 
     const latestBlockColors = useRef(blockColors);
     latestBlockColors.current = blockColors;
@@ -264,6 +452,15 @@ const EditorSettingsModal = props => {
         commitBlockColors(next);
     };
 
+    const handleDeleteBlockColor = colorId => () => {
+        const next = {...latestBlockColors.current};
+        delete next[colorId];
+        setBlockColors(next);
+        applyBlockColors(next);
+        pendingBlockColors.current = null;
+        commitBlockColors(next);
+    };
+
     const handleResetBlockColors = () => {
         setBlockColors({});
         saveBlockColors({});
@@ -285,138 +482,172 @@ const EditorSettingsModal = props => {
         props.onSetPreference('hidden-tabs', []);
     };
 
+    const blockShape = getBlockShape(props.preferences);
+
+    const handleSetBlockShape = (key, value) => {
+        props.onSetPreference('block-shape', {
+            ...blockShape,
+            [key]: value
+        });
+    };
+
+    const handleApplyBlockShapePreset = preset => {
+        props.onSetPreference('block-shape', preset.values);
+    };
+
     const sections = [
         {
             title: messages.general,
             content: <Box>
-                <div className={styles.header}>
-                    <FormattedMessage
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.personal"
                         defaultMessage="Personal"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                {props.usernameInvalid && <p className={classNames(styles.helpText, styles.mustChange)}>
-                    <FormattedMessage
+                    />}
+                >
+                    {props.usernameInvalid && <p className={classNames(styles.helpText, styles.mustChange)}>
+                        <FormattedMessage
                         // eslint-disable-next-line max-len
-                        defaultMessage="Sorry, the cloud variable server thinks your username may be unsafe. Please change it to something else or {resetIt}."
-                        id="tw.usernameModal.mustChange"
-                        values={{
-                            resetIt: (
-                                <a
-                                    className={styles.resetLink}
+                            defaultMessage="Sorry, the cloud variable server thinks your username may be unsafe. Please change it to something else or {resetIt}."
+                            id="nb.editorSettings.username.mustChange"
+                            values={{
+                                resetIt: (
+                                    <a
+                                        className={styles.resetLink}
+                                        // eslint-disable-next-line react/jsx-no-bind
+                                        onClick={() => props.onSetUsername(isScratchDesktop() ? 'player' : generateRandomUsername())}
+                                    >
+                                        <FormattedMessage
+                                            defaultMessage="reset it (recommended)"
+                                            description="link to reset username"
+                                            id="nb.editorSettings.username.mustChange.resetIt"
+                                        />
+                                    </a>
+                                )
+                            }}
+                        />
+                    </p>}
+                    <Setting
+                        primary={(
+                            <div className={classNames(styles.label, styles.customStageSize)}>
+                                <FormattedMessage
+                                    defaultMessage="Username:"
+                                    id="nb.editorSettings.username"
+                                />
+                                <BufferedInput
+                                    value={props.username}
                                     // eslint-disable-next-line react/jsx-no-bind
-                                    onClick={() => props.onSetUsername(isScratchDesktop() ? 'player' : generateRandomUsername())}
+                                    onSubmit={value => {
+                                        props.onSetUsername(value);
+                                    }}
+                                    type="text"
+                                    pattern="[a-zA-Z0-9_\-]*"
+                                    maxLength="20"
+                                    spellCheck="false"
+                                />
+                            </div>
+                        )}
+                        help={<>
+                            <p>
+                                <FormattedMessage
+                                    id="nb.editorSettings.usernameHelp"
+                                    defaultMessage="This value will be stored in your browser's storage. It may be logged when you interact with projects that contain cloud variables. It will also be used for Live Collaboration."
+                                />
+                            </p>
+                            <p>
+                                <FormattedMessage
+                                    id="nb.editorSettings.usernameHelp2"
+                                    defaultMessage="Values that do not correspond to a valid Scratch account will typically be rejected by the cloud variable server. We recommend leaving it as-is or changing it to your Scratch username."
+                                />
+                            </p>
+                        </>}
+                    />
+                    <Box>
+                        <BooleanSetting
+                            value={!windchimeOptOut}
+                            label={<FormattedMessage
+                                id="nb.editorSettings.viewCounter"
+                                defaultMessage="Allow counting my views"
+                            />}
+                            help={<>
+                                <FormattedMessage
+                                    id="nb.editorSettings.viewCounterHelp"
+                                    defaultMessage="When you start a project that is loaded from Scratch, this may be logged so that a view counter can be incremented over time. Views are anonymous and can not be tied back to any user."
+                                /> <a
+                                    href="/privacy.html"
+                                    target="_blank"
                                 >
                                     <FormattedMessage
-                                        defaultMessage="reset it (recommended)"
-                                        description="link to reset username"
-                                        id="tw.usernameModal.mustChange.resetIt"
+                                        id="nb.editorSettings.viewCounterPrivacyLink"
+                                        defaultMessage="Privacy policy"
                                     />
                                 </a>
-                            )
-                        }}
-                    />
-                </p>}
-                <Setting
-                    primary={(
-                        <div className={classNames(styles.label, styles.customStageSize)}>
-                            <FormattedMessage
-                                defaultMessage="Username:"
-                                id="nb.editorSettings.username"
-                            />
-                            <BufferedInput
-                                value={props.username}
-                                // eslint-disable-next-line react/jsx-no-bind
-                                onSubmit={value => {
-                                    props.onSetUsername(value);
-                                }}
-                                type="text"
-                                pattern="[a-zA-Z0-9_\-]*"
-                                maxLength="20"
-                                spellCheck="false"
-                            />
-                        </div>
-                    )}
-                    help={<>
-                        <p>
-                            <FormattedMessage
-                                id="nb.editorSettings.usernameHelp"
-                                defaultMessage="This value will be stored in your browser's storage. It may be logged when you interact with projects that contain cloud variables. It will also be used for Live Collaboration."
-                            />
-                        </p>
-                        <p>
-                            <FormattedMessage
-                                id="nb.editorSettings.usernameHelp2"
-                                defaultMessage="Values that do not correspond to a valid Scratch account will typically be rejected by the cloud variable server. We recommend leaving it as-is or changing it to your Scratch username."
-                            />
-                        </p>
-                    </>}
-                />
-                <Box>
+                            </>}
+                            // eslint-disable-next-line react/jsx-no-bind
+                            onChange={e => {
+                                localStorage.setItem('tw:windchime_opt_out', !e.target.checked);
+                                setWindchimeOptOut(!e.target.checked);
+                            }}
+                        />
+                    </Box>
                     <BooleanSetting
-                        value={!windchimeOptOut}
+                        value={!!props.preferences['enable-debugger']}
                         label={<FormattedMessage
-                            id="nb.editorSettings.viewCounter"
-                            defaultMessage="Allow counting my views"
+                            id="nb.editorSettings.enableDebugger"
+                            defaultMessage="Enable debugger"
                         />}
-                        help={<>
-                            <FormattedMessage
-                                id="nb.editorSettings.viewCounterHelp"
-                                defaultMessage="When you start a project that is loaded from Scratch, this may be logged so that a view counter can be incremented over time. Views are anonymous and can not be tied back to any user."
-                            /> <a
-                                href="/privacy.html"
-                                target="_blank"
-                            >
-                                <FormattedMessage
-                                    id="nb.editorSettings.viewCounterPrivacyLink"
-                                    defaultMessage="Privacy policy"
-                                />
-                            </a>
-                        </>}
-                        // eslint-disable-next-line react/jsx-no-bind
+                        help={<FormattedMessage
+                            id="nb.editorSettings.enableDebuggerHelp"
+                            defaultMessage="Enables a debugger panel and extension that allows you to inspect logs and monitor performance. The debugger contains the most functionality with the compiler disabled."
+                        />}
                         onChange={e => {
-                            localStorage.setItem('tw:windchime_opt_out', !e.target.checked);
-                            setWindchimeOptOut(!e.target.checked);
+                            props.onSetPreference('enable-debugger', e.target.checked);
+                            // Load debugger extension if it's enabled and not already loaded
+                            if (
+                                e.target.checked &&
+                                !props.vm.extensionManager.isExtensionLoaded('debugger')
+                            ) {
+                                props.vm.extensionManager.loadExtensionIdSync('debugger');
+                            }
                         }}
                     />
-                </Box>
-                <div className={styles.header}>
-                    <FormattedMessage
+                </Section>
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.dangerZone"
                         defaultMessage="Danger Zone"
+                    />}
+                >
+                    <BooleanSetting
+                        value={!!props.preferences['disable-compiler']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.disableCompiler"
+                            defaultMessage="Always disable compiler"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.disableCompilerHelp"
+                            defaultMessage="Disables the {APP_NAME} compiler by default. It can still be manually enabled per-project through Edit > Advanced Settings."
+                            values={{
+                                APP_NAME
+                            }}
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('disable-compiler', e.target.checked)}
                     />
-                    <div className={styles.divider} />
-                </div>
-                <BooleanSetting
-                    value={!!props.preferences['disable-compiler']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.disableCompiler"
-                        defaultMessage="Always disable compiler"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.disableCompilerHelp"
-                        defaultMessage="Disables the {APP_NAME} compiler by default. It can still be manually enabled per-project through Edit > Advanced Settings."
-                        values={{
-                            APP_NAME
-                        }}
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => props.onSetPreference('disable-compiler', e.target.checked)}
-                />
-                <BooleanSetting
-                    value={!!props.preferences['disable-inspect-block']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.disableInspectBlock"
-                        defaultMessage="Disable block inspector"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.disableInspectBlockHelp"
-                        defaultMessage="Removes the Inspect Block item from the right-click context menu on blocks."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => props.onSetPreference('disable-inspect-block', e.target.checked)}
-                />
+                    <BooleanSetting
+                        value={!!props.preferences['disable-inspect-block']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.disableInspectBlock"
+                            defaultMessage="Disable block inspector"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.disableInspectBlockHelp"
+                            defaultMessage="Removes the Inspect Block item from the right-click context menu on blocks."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('disable-inspect-block', e.target.checked)}
+                    />
+                </Section>
             </Box>
         },
         {
@@ -480,144 +711,434 @@ const EditorSettingsModal = props => {
                         props.onSetPreference('stage-left', e.target.checked);
                     }}
                 />
-                <BooleanSetting
-                    value={props.preferences['waveform-render-type'] === 'sharp'}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.waveformRenderType"
-                        defaultMessage="Sharp waveforms"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.waveformRenderTypeHelp"
-                        defaultMessage="Choose between sharp edges on sound waveforms or soft edges like in Scratch. Sharp edges can offer more detail on large sounds."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => {
-                        props.onSetPreference('waveform-render-type', e.target.checked ? 'sharp' : 'soft');
-                    }}
-                />
-                <BooleanSetting
-                    value={props.preferences['waveform-color'] === 'volume'}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.waveformColor"
-                        defaultMessage="Waveform volume gradient"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.waveformColorHelp"
-                        defaultMessage="If checked, waveforms will display a volume gradient where green is quieter and red is louder."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => {
-                        props.onSetPreference('waveform-color', e.target.checked ? 'volume' : null);
-                    }}
-                />
-                <BooleanSetting
-                    value={!!props.preferences['enable-debugger']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.enableDebugger"
-                        defaultMessage="Enable debugger"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.enableDebuggerHelp"
-                        defaultMessage="Enables a debugger panel and extension that allows you to inspect logs and performance."
-                    />}
-                    onChange={e => {
-                        props.onSetPreference('enable-debugger', e.target.checked);
-                    }}
-                />
-                <div className={styles.header}>
-                    <FormattedMessage
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.theme"
                         defaultMessage="Theme"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <p>
-                    <button
-                        className={styles.button}
-                        onClick={props.onOpenAccentManager}
-                    >
-                        <FormattedMessage
-                            id="nb.editorSettings.openAccentManager"
-                            defaultMessage="Open Accent Manager"
-                        />
-                    </button>
-                </p>
-                <BooleanSetting
-                    value={props.theme.gui === GUI_DARK}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.darkMode"
-                        defaultMessage="Dark mode"
                     />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.darkModeHelp"
-                        defaultMessage="Turns the website dark to make it easier on the eyes."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={() => props.onChangeTheme(props.theme.set('gui', props.theme.gui === GUI_DARK ? GUI_LIGHT : GUI_DARK))}
-                />
-                <div className={styles.header}>
-                    <FormattedMessage
-                        id="nb.editorSettings.dangerZone"
-                        defaultMessage="Danger Zone"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <BooleanSetting
-                    value={!!props.preferences['hide-backpack']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.hideBackpack"
-                        defaultMessage="Hide backpack"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.hideBackpackHelp"
-                        defaultMessage="Removes the backpack from the bottom of the screen."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => {
-                        props.onSetPreference('hide-backpack', e.target.checked);
-                        // resizes block palette and stuff
-                        requestAnimationFrame(() => dispatchEvent(new Event('resize')));
-                    }}
-                />
-                <BooleanSetting
-                    value={!!props.preferences['hide-feedback']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.hideFeedback"
-                        defaultMessage="Hide feedback button"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.hideFeedbackHelp"
-                        defaultMessage="Removes the feedback button from the top of the screen."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => props.onSetPreference('hide-feedback', e.target.checked)}
-                />
-                <Setting
-                    help={
-                        <FormattedMessage
-                            id="nb.editorSettings.visibleTabsHelp"
-                            defaultMessage="Choose which tabs to show in the editor. Hidden tabs can still be accessed via keyboard shortcuts."
-                        />
-                    }
-                    primary={
+                >
+                    <p>
                         <button
-                            className={classNames(styles.label, styles.collapseButton)}
-                            onClick={() => setTabsExpanded(e => !e)}
+                            className={styles.button}
+                            onClick={props.onOpenAccentManager}
                         >
                             <FormattedMessage
-                                id="nb.editorSettings.visibleTabs"
-                                defaultMessage="Visible tabs"
-                            />
-                            <img
-                                className={classNames(styles.collapseArrow, {
-                                    [styles.collapseArrowExpanded]: tabsExpanded
-                                })}
-                                src={dropdownCaret}
+                                id="nb.editorSettings.openAccentManager"
+                                defaultMessage="Open Accent Manager"
                             />
                         </button>
-                    }
-                    secondary={
-                        tabsExpanded && (<div><div className={styles.categoryGrid}>
+                    </p>
+                    <BooleanSetting
+                        value={props.theme.gui === GUI_DARK}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.darkMode"
+                            defaultMessage="Dark mode"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.darkModeHelp"
+                            defaultMessage="Turns the website dark to make it easier on the eyes."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={() => props.onChangeTheme(props.theme.set('gui', props.theme.gui === GUI_DARK ? GUI_LIGHT : GUI_DARK))}
+                    />
+                    <Setting
+                        help={<FormattedMessage
+                            id="nb.editorSettings.labelContrastThresholdHelp"
+                            defaultMessage="Sets how bright a block color must be before its text label switches to dark for readability. Lower values use dark text less often, higher values use dark text more often."
+                        />}
+                        primary={(
+                            <div className={classNames(styles.label, styles.customStageSize)}>
+                                <FormattedMessage
+                                    defaultMessage="Label Contrast Threshold (0-255):"
+                                    id="nb.editorSettings.labelContrastThreshold"
+                                />
+                                <BufferedInput
+                                    value={String(props.preferences['label-contrast-threshold'] === (void 0) ? labelContrastDefault : props.preferences['label-contrast-threshold'])}
+                                    onSubmit={value => {
+                                        const num = Number(value);
+                                        if (Number.isFinite(num) && num >= 0 && num <= 255) {
+                                            props.onSetPreference('label-contrast-threshold', num);
+                                        }
+                                    }}
+                                    type="number"
+                                    min="0"
+                                    max="255"
+                                    spellCheck="false"
+                                />
+                            </div>
+                        )}
+                        secondary={(
+                            <LabelContrastPreview
+                                baseColor={blockColors.motion || BLOCK_COLOR_CATEGORIES[0].default}
+                                threshold={props.preferences['label-contrast-threshold']}
+                            />
+                        )}
+                    />
+                </Section>
+                <Section
+                    title={<FormattedMessage
+                        id="nb.editorSettings.toolbox"
+                        defaultMessage="Toolbox"
+                    />}
+                >
+                    <BooleanSetting
+                        value={!!props.preferences['hide-nb-blocks']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.vanillaPalette"
+                            defaultMessage="Vanilla palette"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.vanillaPaletteHelp"
+                            defaultMessage="Hides NitroBolt-exclusive blocks and hides the JSON and assets categories."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('hide-nb-blocks', e.target.checked)}
+                    />
+                    <BooleanSetting
+                        value={!!props.preferences['extendable-arrows-left']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.extendableArrowsLeft"
+                            defaultMessage="Extendable arrows on left"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.extendableArrowsLeftHelp"
+                            defaultMessage="Moves the arrows of expandable blocks from the right side to the left side."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('extendable-arrows-left', e.target.checked)}
+                    />
+                    <CollapsibleSetting
+                        label={<FormattedMessage
+                            id="nb.editorSettings.hiddenCategories"
+                            defaultMessage="Visible categories"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.hiddenCategoriesHelp"
+                            defaultMessage="Choose which default categories to show or hide in the block toolbox."
+                        />}
+                    >
+                        <div><div className={styles.categoryGrid}>
+                            {toolboxCategories.map(category => {
+                                const isNB = category.id === 'json' || category.id === 'assets';
+                                const hideNB = !!props.preferences['hide-nb-blocks'] && isNB;
+                                const isVisible = !hideNB && !hiddenCategories.includes(category.id);
+                                const visibleCount = toolboxCategories.filter(c =>
+                                    !(!!props.preferences['hide-nb-blocks'] && (c.id === 'json' || c.id === 'assets')) &&
+                                !hiddenCategories.includes(c.id)
+                                ).length;
+
+                                return (
+                                    <label
+                                        key={category.id}
+                                        className={styles.label}
+                                    >
+                                        <FancyCheckbox
+                                            className={styles.checkbox}
+                                            checked={isVisible}
+                                            disabled={hideNB || (isVisible && visibleCount === 1)}
+                                            onChange={() => {
+                                                const next = hiddenCategories.includes(category.id) ?
+                                                    hiddenCategories.filter(id => id !== category.id) :
+                                                    [...hiddenCategories, category.id];
+                                                props.onSetPreference('hidden-categories', next);
+                                            }}
+                                        />
+                                        {category.label}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <button
+                            className={styles.button}
+                            onClick={handleResetCategoriesVisibility}
+                            style={{marginTop: '8px'}}
+                        >
+                            <FormattedMessage
+                                id="nb.editorSettings.resetCategoriesVisibility"
+                                defaultMessage="Reset to defaults"
+                            />
+                        </button>
+                        </div>
+                    </CollapsibleSetting>
+                    <CollapsibleSetting
+                        label={<FormattedMessage
+                            id="nb.editorSettings.blockColors"
+                            defaultMessage="Block colors"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.blockColorsHelp"
+                            defaultMessage="Customize the primary color of each block category."
+                        />}
+                    >
+                        <div>
+                            <div className={styles.categoryGrid}>
+                                {BLOCK_COLOR_CATEGORIES.map(cat => {
+                                    const value = blockColors[cat.colorId] || cat.default;
+                                    return (
+                                        <div
+                                            key={cat.colorId}
+                                            className={classNames(styles.label, styles.categoryColorLabel)}
+                                        >
+                                            <ColorPicker
+                                                value={value}
+                                                onChange={v => handleBlockColorPreview(cat.colorId, v)}
+                                                onCommit={handleBlockColorCommit(cat.colorId)}
+                                                className={styles.colorInput}
+                                                showIcon={false}
+                                                label={false}
+                                                size={'1.8rem'}
+                                            />
+                                            <span>{cat.label}</span>
+                                            <DeleteButton
+                                                onClick={handleDeleteBlockColor(cat.colorId)}
+                                                className={styles.deleteButton}
+                                                useUndoIcon
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <button
+                                className={styles.button}
+                                onClick={handleResetBlockColors}
+                                style={{marginTop: '8px'}}
+                            >
+                                <FormattedMessage
+                                    id="nb.editorSettings.resetBlockColors"
+                                    defaultMessage="Reset to defaults"
+                                />
+                            </button>
+                        </div>
+                    </CollapsibleSetting>
+                    <CollapsibleSetting
+                        label={<FormattedMessage
+                            id="nb.editorSettings.customBlockShape"
+                            defaultMessage="Customizable block shape"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.customBlockShapeHelp"
+                            defaultMessage="Adjust the padding, corner radius, notch height, and field height of blocks."
+                        />}
+                    >
+                        <div>
+                            <div>
+                                <Setting
+                                    help={<FormattedMessage
+                                        id="nb.editorSettings.paddingSizeHelp"
+                                        defaultMessage="Controls the overall size and spacing of blocks."
+                                    />}
+                                    primary={(
+                                        <div className={classNames(styles.label, styles.customStageSize)}>
+                                            <FormattedMessage
+                                                defaultMessage="Padding size (50-200%):"
+                                                id="nb.editorSettings.paddingSize"
+                                            />
+                                            <BufferedInput
+                                                value={String(blockShape.paddingSize)}
+                                                onSubmit={value => {
+                                                    const num = Number(value);
+                                                    if (Number.isFinite(num) && num >= 50 && num <= 200) {
+                                                        handleSetBlockShape('paddingSize', num);
+                                                    }
+                                                }}
+                                                type="number"
+                                                min="50"
+                                                max="200"
+                                                spellCheck="false"
+                                            />
+                                        </div>
+                                    )}
+                                />
+                                <Setting
+                                    help={<FormattedMessage
+                                        id="nb.editorSettings.cornerSizeHelp"
+                                        defaultMessage="Controls how rounded the corners of blocks are."
+                                    />}
+                                    primary={(
+                                        <div className={classNames(styles.label, styles.customStageSize)}>
+                                            <FormattedMessage
+                                                defaultMessage="Corner size (0-300%):"
+                                                id="nb.editorSettings.cornerSize"
+                                            />
+                                            <BufferedInput
+                                                value={String(blockShape.cornerSize)}
+                                                onSubmit={value => {
+                                                    const num = Number(value);
+                                                    if (Number.isFinite(num) && num >= 0 && num <= 300) {
+                                                        handleSetBlockShape('cornerSize', num);
+                                                    }
+                                                }}
+                                                type="number"
+                                                min="0"
+                                                max="300"
+                                                spellCheck="false"
+                                            />
+                                        </div>
+                                    )}
+                                />
+                                <Setting
+                                    help={<FormattedMessage
+                                        id="nb.editorSettings.maxCornerRadiusHelp"
+                                        defaultMessage="Sets an upper limit on the corner radius as a multiple of the base corner size, used by round output blocks."
+                                    />}
+                                    primary={(
+                                        <div className={classNames(styles.label, styles.customStageSize)}>
+                                            <FormattedMessage
+                                                defaultMessage="Max corner radius (1x-12x):"
+                                                id="nb.editorSettings.maxCornerRadius"
+                                            />
+                                            <BufferedInput
+                                                value={String(blockShape.maxCornerRadius)}
+                                                onSubmit={value => {
+                                                    const num = Number(value);
+                                                    if (Number.isFinite(num) && num >= 1 && num <= 12) {
+                                                        handleSetBlockShape('maxCornerRadius', num);
+                                                    }
+                                                }}
+                                                type="number"
+                                                min="1"
+                                                max="12"
+                                                spellCheck="false"
+                                            />
+                                        </div>
+                                    )}
+                                />
+                                <Setting
+                                    help={<FormattedMessage
+                                        id="nb.editorSettings.notchSizeHelp"
+                                        defaultMessage="Controls how tall the notches and bumps that let blocks snap together are."
+                                    />}
+                                    primary={(
+                                        <div className={classNames(styles.label, styles.customStageSize)}>
+                                            <FormattedMessage
+                                                defaultMessage="Notch height (0-150%):"
+                                                id="nb.editorSettings.notchSize"
+                                            />
+                                            <BufferedInput
+                                                value={String(blockShape.notchSize)}
+                                                onSubmit={value => {
+                                                    const num = Number(value);
+                                                    if (Number.isFinite(num) && num >= 0 && num <= 150) {
+                                                        handleSetBlockShape('notchSize', num);
+                                                    }
+                                                }}
+                                                type="number"
+                                                min="0"
+                                                max="150"
+                                                spellCheck="false"
+                                            />
+                                        </div>
+                                    )}
+                                />
+                                <Setting
+                                    help={<FormattedMessage
+                                        id="nb.editorSettings.fieldHeightHelp"
+                                        defaultMessage="Controls the height of text inputs and dropdowns inside blocks, independent of overall padding."
+                                    />}
+                                    primary={(
+                                        <div className={classNames(styles.label, styles.customStageSize)}>
+                                            <FormattedMessage
+                                                defaultMessage="Field height (75-150%):"
+                                                id="nb.editorSettings.fieldHeight"
+                                            />
+                                            <BufferedInput
+                                                value={String(blockShape.fieldHeight)}
+                                                onSubmit={value => {
+                                                    const num = Number(value);
+                                                    if (Number.isFinite(num) && num >= 75 && num <= 150) {
+                                                        handleSetBlockShape('fieldHeight', num);
+                                                    }
+                                                }}
+                                                type="number"
+                                                min="75"
+                                                max="150"
+                                                spellCheck="false"
+                                            />
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                            <p className={styles.info}>
+                                <FormattedMessage
+                                    id="nb.editorSettings.presets"
+                                    defaultMessage="Presets"
+                                />
+                            </p>
+                            <div className={styles.presetRow}>
+                                {BLOCK_SHAPE_PRESETS.map(preset => (
+                                    <button
+                                        key={preset.id}
+                                        className={styles.button}
+                                        onClick={() => handleApplyBlockShapePreset(preset)}
+                                        title={preset.description}
+                                    >
+                                        {preset.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </CollapsibleSetting>
+                </Section>
+                <Section
+                    title={<FormattedMessage
+                        id="nb.editorSettings.dangerZone"
+                        defaultMessage="Danger Zone"
+                    />}
+                >
+                    <BooleanSetting
+                        value={!!props.preferences['hide-backpack']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.hideBackpack"
+                            defaultMessage="Hide backpack"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.hideBackpackHelp"
+                            defaultMessage="Removes the backpack from the bottom of the screen."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => {
+                            props.onSetPreference('hide-backpack', e.target.checked);
+                            // resizes block palette and stuff
+                            requestAnimationFrame(() => dispatchEvent(new Event('resize')));
+                        }}
+                    />
+                    <BooleanSetting
+                        value={!!props.preferences['hide-pause']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.hidePause"
+                            defaultMessage="Hide pause button"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.hidePauseHelp"
+                            defaultMessage="Removes the pause button from the project controls."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('hide-pause', e.target.checked)}
+                    />
+                    <BooleanSetting
+                        value={!!props.preferences['hide-feedback']}
+                        label={<FormattedMessage
+                            id="nb.editorSettings.hideFeedback"
+                            defaultMessage="Hide feedback button"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.hideFeedbackHelp"
+                            defaultMessage="Removes the feedback button from the top of the screen."
+                        />}
+                        // eslint-disable-next-line react/jsx-no-bind
+                        onChange={e => props.onSetPreference('hide-feedback', e.target.checked)}
+                    />
+                    <CollapsibleSetting
+                        label={<FormattedMessage
+                            id="nb.editorSettings.visibleTabs"
+                            defaultMessage="Visible tabs"
+                        />}
+                        help={<FormattedMessage
+                            id="nb.editorSettings.visibleTabsHelp"
+                            defaultMessage="Choose which tabs to show in the editor. Hidden tabs can still be accessed via keyboard shortcuts."
+                        />}
+                    >
+                        <div><div className={styles.categoryGrid}>
                             {editorTabs.map(tab => {
                                 const isHidden = hiddenTabs.includes(tab.index);
                                 const visibleCount = editorTabs.filter(t =>
@@ -656,164 +1177,9 @@ const EditorSettingsModal = props => {
                                 defaultMessage="Reset to defaults"
                             />
                         </button>
-                        </div>)
-                    }
-                />
-                <div className={styles.header}>
-                    <FormattedMessage
-                        id="nb.editorSettings.toolbox"
-                        defaultMessage="Toolbox"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <BooleanSetting
-                    value={!!props.preferences['hide-nb-blocks']}
-                    label={<FormattedMessage
-                        id="nb.editorSettings.vanillaPalette"
-                        defaultMessage="Vanilla palette"
-                    />}
-                    help={<FormattedMessage
-                        id="nb.editorSettings.vanillaPaletteHelp"
-                        defaultMessage="Hides NitroBolt-exclusive blocks (e.g. extended operators, switch, for-each-in-range, etc.) and hides the JSON and assets categories."
-                    />}
-                    // eslint-disable-next-line react/jsx-no-bind
-                    onChange={e => props.onSetPreference('hide-nb-blocks', e.target.checked)}
-                />
-                <Setting
-                    help={
-                        <FormattedMessage
-                            id="nb.editorSettings.hiddenCategoriesHelp"
-                            defaultMessage="Choose which default categories to show or hide in the block toolbox."
-                        />
-                    }
-                    primary={
-                        <button
-                            className={classNames(styles.label, styles.collapseButton)}
-                            onClick={() => setCategoriesExpanded(e => !e)}
-                        >
-                            <FormattedMessage
-                                id="nb.editorSettings.hiddenCategories"
-                                defaultMessage="Visible categories"
-                            />
-                            <img
-                                className={classNames(styles.collapseArrow, {
-                                    [styles.collapseArrowExpanded]: categoriesExpanded
-                                })}
-                                src={dropdownCaret}
-                            />
-                        </button>
-                    }
-                    secondary={
-                        categoriesExpanded && (<div><div className={styles.categoryGrid}>
-                            {toolboxCategories.map(category => {
-                                const isNB = category.id === 'json' || category.id === 'assets';
-                                const hideNB = !!props.preferences['hide-nb-blocks'] && isNB;
-                                const isVisible = !hideNB && !hiddenCategories.includes(category.id);
-                                const visibleCount = toolboxCategories.filter(c =>
-                                    !(!!props.preferences['hide-nb-blocks'] && (c.id === 'json' || c.id === 'assets')) &&
-                                    !hiddenCategories.includes(c.id)
-                                ).length;
-
-                                return (
-                                    <label
-                                        key={category.id}
-                                        className={styles.label}
-                                    >
-                                        <FancyCheckbox
-                                            className={styles.checkbox}
-                                            checked={isVisible}
-                                            disabled={hideNB || (isVisible && visibleCount === 1)}
-                                            onChange={() => {
-                                                const next = hiddenCategories.includes(category.id) ?
-                                                    hiddenCategories.filter(id => id !== category.id) :
-                                                    [...hiddenCategories, category.id];
-                                                props.onSetPreference('hidden-categories', next);
-                                            }}
-                                        />
-                                        {category.label}
-                                    </label>
-                                );
-                            })}
                         </div>
-                        <button
-                            className={styles.button}
-                            onClick={handleResetCategoriesVisibility}
-                            style={{marginTop: '8px'}}
-                        >
-                            <FormattedMessage
-                                id="nb.editorSettings.resetCategoriesVisibility"
-                                defaultMessage="Reset to defaults"
-                            />
-                        </button>
-                        </div>)
-                    }
-                />
-                <Setting
-                    help={
-                        <FormattedMessage
-                            id="nb.editorSettings.blockColorsHelp"
-                            defaultMessage="Customize the primary color of each block category."
-                        />
-                    }
-                    primary={
-                        <button
-                            className={classNames(styles.label, styles.collapseButton)}
-                            onClick={() => setBlockColorsExpanded(e => !e)}
-                        >
-                            <FormattedMessage
-                                id="nb.editorSettings.blockColors"
-                                defaultMessage="Block colors"
-                            />
-                            <img
-                                className={classNames(styles.collapseArrow, {
-                                    [styles.collapseArrowExpanded]: blockColorsExpanded
-                                })}
-                                src={dropdownCaret}
-                            />
-                        </button>
-                    }
-                    secondary={
-                        blockColorsExpanded && (
-                            <div>
-                                <div className={styles.categoryGrid}>
-                                    {BLOCK_COLOR_CATEGORIES.map(cat => {
-                                        const value = blockColors[cat.colorId] || cat.default;
-                                        return (
-                                            <label
-                                                key={cat.colorId}
-                                                className={styles.label}
-                                                style={{gap: '0.33rem', width: 'fit-content'}}
-                                            >
-                                                <ColorPicker
-                                                    value={value}
-                                                    // eslint-disable-next-line react/jsx-no-bind
-                                                    onChange={v => handleBlockColorPreview(cat.colorId, v)}
-                                                    // eslint-disable-next-line react/jsx-no-bind
-                                                    onCommit={handleBlockColorCommit(cat.colorId)}
-                                                    className={styles.colorInput}
-                                                    showIcon={false}
-                                                    label={false}
-                                                    size={'1.8rem'}
-                                                />
-                                                <span>{cat.label}</span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                                <button
-                                    className={styles.button}
-                                    onClick={handleResetBlockColors}
-                                    style={{marginTop: '8px'}}
-                                >
-                                    <FormattedMessage
-                                        id="nb.editorSettings.resetBlockColors"
-                                        defaultMessage="Reset to defaults"
-                                    />
-                                </button>
-                            </div>
-                        )
-                    }
-                />
+                    </CollapsibleSetting>
+                </Section>
             </Box>
         },
         {
@@ -845,6 +1211,36 @@ const EditorSettingsModal = props => {
                         <FormattedMessage
                             id="nb.editorSettings.nudgeMultiplierHelp"
                             defaultMessage="How far selected objects move when pressing Shift+Arrow keys in the paint editor."
+                        />
+                    }
+                />
+                <Setting
+                    primary={(
+                        <div className={classNames(styles.label, styles.customStageSize)}>
+                            <FormattedMessage
+                                defaultMessage="Canvas size multiplier:"
+                                id="nb.editorSettings.canvasSizeMultiplier"
+                            />
+                            <BufferedInput
+                                value={String(props.preferences['paint-canvas-size-multiplier'] ?? 2)}
+                                // eslint-disable-next-line react/jsx-no-bind
+                                onSubmit={value => {
+                                    const num = Number(value);
+                                    if (Number.isFinite(num) && num > 0 && num <= 10) {
+                                        props.onSetPreference('paint-canvas-size-multiplier', num);
+                                    }
+                                }}
+                                type="number"
+                                min="1"
+                                max="10"
+                                spellCheck="false"
+                            />
+                        </div>
+                    )}
+                    help={
+                        <FormattedMessage
+                            id="nb.editorSettings.canvasSizeMultiplierHelp"
+                            defaultMessage="How large the canvas is in the paint editor relative to the stage."
                         />
                     }
                 />
@@ -907,116 +1303,170 @@ const EditorSettingsModal = props => {
                         defaultMessage="Defines the bit rate for sounds encoded in NitroBolt."
                     />}
                 />
+                <BooleanSetting
+                    value={props.preferences['waveform-render-type'] === 'sharp'}
+                    label={<FormattedMessage
+                        id="nb.editorSettings.waveformRenderType"
+                        defaultMessage="Sharp waveforms"
+                    />}
+                    help={<FormattedMessage
+                        id="nb.editorSettings.waveformRenderTypeHelp"
+                        defaultMessage="Choose between sharp edges on sound waveforms or soft edges like in Scratch. Sharp edges can offer more detail on large sounds."
+                    />}
+                    // eslint-disable-next-line react/jsx-no-bind
+                    onChange={e => {
+                        props.onSetPreference('waveform-render-type', e.target.checked ? 'sharp' : 'soft');
+                    }}
+                />
+                <BooleanSetting
+                    value={props.preferences['waveform-color'] === 'volume'}
+                    label={<FormattedMessage
+                        id="nb.editorSettings.waveformColor"
+                        defaultMessage="Waveform volume gradient"
+                    />}
+                    help={<FormattedMessage
+                        id="nb.editorSettings.waveformColorHelp"
+                        defaultMessage="If checked, waveforms will display a volume gradient where green is quieter and red is louder."
+                    />}
+                    // eslint-disable-next-line react/jsx-no-bind
+                    onChange={e => {
+                        props.onSetPreference('waveform-color', e.target.checked ? 'volume' : null);
+                    }}
+                />
             </Box>
         },
         {
             title: messages.versionControl,
-            content: <p>{'Coming Soon'}</p>
+            content: <Box>
+                <Setting
+                    primary={(
+                        <div className={classNames(styles.label, styles.customStageSize)}>
+                            <FormattedMessage
+                                defaultMessage="Default branch name:"
+                                id="nb.editorSettings.versionControl.defaultBranch"
+                            />
+                            <BufferedInput
+                                value={props.preferences['git-default-branch'] || 'master'}
+                                // eslint-disable-next-line react/jsx-no-bind
+                                onSubmit={value => {
+                                    props.onSetPreference('git-default-branch', value.trim() || 'master');
+                                }}
+                                type="text"
+                                spellCheck="false"
+                            />
+                        </div>
+                    )}
+                    help={<FormattedMessage
+                        defaultMessage="The initial branch name used when creating a new Git repository. Existing repositories are not affected."
+                        id="nb.editorSettings.versionControl.defaultBranchHelp"
+                    />}
+                />
+            </Box>
         },
         {
             title: messages.keymap,
             content: <Box>
-                <div className={styles.header}>
-                    <FormattedMessage
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.keymap.popups"
                         defaultMessage="Popups"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Open backpack"
-                        id="nb.editorSettings.keymap.openBackpack"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-open-backpack', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-open-backpack'] ?? defaultKeyboardShortcuts['open-backpack']}
-                    />
-                </Box>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Open editor settings"
-                        id="nb.editorSettings.keymap.openEditorSettings"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-open-editor-settings', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-open-editor-settings'] ?? defaultKeyboardShortcuts['open-editor-settings']}
-                    />
-                </Box>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Open extension catalog"
-                        id="nb.editorSettings.keymap.openExtentions"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-open-extensions', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-open-extensions'] ?? defaultKeyboardShortcuts['open-extensions']}
-                    />
-                </Box>
-                <div className={styles.header}>
-                    <FormattedMessage
+                    />}
+                >
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Open backpack"
+                            id="nb.editorSettings.keymap.openBackpack"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-open-backpack', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-open-backpack'] ?? defaultKeyboardShortcuts['open-backpack']}
+                        />
+                    </Box>
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Open editor settings"
+                            id="nb.editorSettings.keymap.openEditorSettings"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-open-editor-settings', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-open-editor-settings'] ?? defaultKeyboardShortcuts['open-editor-settings']}
+                        />
+                    </Box>
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Open extension catalog"
+                            id="nb.editorSettings.keymap.openExtentions"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-open-extensions', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-open-extensions'] ?? defaultKeyboardShortcuts['open-extensions']}
+                        />
+                    </Box>
+                </Section>
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.keymap.projectControls"
                         defaultMessage="Project Controls"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Start project"
-                        id="nb.editorSettings.keymap.startProject"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-start-project', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-start-project'] ?? defaultKeyboardShortcuts['start-project']}
-                    />
-                </Box>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Stop project"
-                        id="nb.editorSettings.keymap.stopProject"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-stop-project', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-stop-project'] ?? defaultKeyboardShortcuts['stop-project']}
-                    />
-                </Box>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Toggle project full screen"
-                        id="nb.editorSettings.keymap.projectFullScreen"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-project-full-screen', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-project-full-screen'] ?? defaultKeyboardShortcuts['project-full-screen']}
-                    />
-                </Box>
-                <div className={styles.header}>
-                    <FormattedMessage
+                    />}
+                >
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Start project"
+                            id="nb.editorSettings.keymap.startProject"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-start-project', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-start-project'] ?? defaultKeyboardShortcuts['start-project']}
+                        />
+                    </Box>
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Stop project"
+                            id="nb.editorSettings.keymap.stopProject"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-stop-project', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-stop-project'] ?? defaultKeyboardShortcuts['stop-project']}
+                        />
+                    </Box>
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Toggle project full screen"
+                            id="nb.editorSettings.keymap.projectFullScreen"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-project-full-screen', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-project-full-screen'] ?? defaultKeyboardShortcuts['project-full-screen']}
+                        />
+                    </Box>
+                </Section>
+                <Section
+                    title={<FormattedMessage
                         id="nb.editorSettings.keymap.spriteSettings"
                         defaultMessage="Sprite Settings"
-                    />
-                    <div className={styles.divider} />
-                </div>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Change sprite name"
-                        id="nb.editorSettings.keymap.changeSpriteName"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-change-sprite-name', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-change-sprite-name'] ?? defaultKeyboardShortcuts['change-sprite-name']}
-                    />
-                </Box>
-                <Box className={styles.keySetting}>
-                    <FormattedMessage
-                        defaultMessage="Toggle sprite visibility"
-                        id="nb.editorSettings.keymap.spriteVisibility"
-                    />
-                    <KeyInput
-                        onChange={shortcut => props.onSetPreference('keybind-toggle-sprite-visibility', shortcut.toJSON())}
-                        shortcut={props.preferences['keybind-toggle-sprite-visibility'] ?? defaultKeyboardShortcuts['toggle-sprite-visibility']}
-                    />
-                </Box>
+                    />}
+                >
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Change sprite name"
+                            id="nb.editorSettings.keymap.changeSpriteName"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-change-sprite-name', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-change-sprite-name'] ?? defaultKeyboardShortcuts['change-sprite-name']}
+                        />
+                    </Box>
+                    <Box className={styles.keySetting}>
+                        <FormattedMessage
+                            defaultMessage="Toggle sprite visibility"
+                            id="nb.editorSettings.keymap.spriteVisibility"
+                        />
+                        <KeyInput
+                            onChange={shortcut => props.onSetPreference('keybind-toggle-sprite-visibility', shortcut.toJSON())}
+                            shortcut={props.preferences['keybind-toggle-sprite-visibility'] ?? defaultKeyboardShortcuts['toggle-sprite-visibility']}
+                        />
+                    </Box>
+                </Section>
             </Box>
         }
     ];
@@ -1095,6 +1545,7 @@ EditorSettingsModal.propTypes = {
     onSetUsername: PropTypes.func,
     preferences: PropTypes.object.isRequired,
     onSetPreference: PropTypes.func.isRequired,
+    vm: PropTypes.object,
     theme: PropTypes.instanceOf(Theme),
     username: PropTypes.string,
     usernameInvalid: PropTypes.bool,
@@ -1110,7 +1561,8 @@ const mapStateToProps = state => ({
     username: state.scratchGui.tw.username,
     usernameInvalid: state.scratchGui.tw.usernameInvalid,
     activeTab: state.scratchGui.modals.editorSettingsModalTab,
-    preferences: state.scratchGui.preferences
+    preferences: state.scratchGui.preferences,
+    vm: state.scratchGui.vm
 });
 
 const mapDispatchToProps = dispatch => ({

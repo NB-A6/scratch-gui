@@ -115,7 +115,7 @@ class CustomProcedures extends React.Component {
         this.setState({
             warp: this.mutationRoot.getWarp(),
             global: this.mutationRoot.getGlobal(),
-            colour: this.mutationRoot.colour_
+            colour: this.mutationRoot.getProcedureColour()
         });
         // Allow the initial events to run to position this block, then focus.
         setTimeout(() => {
@@ -159,14 +159,18 @@ class CustomProcedures extends React.Component {
             case 'array':
                 this.mutationRoot.addArrayExternal();
                 break;
+            case 'color':
+                this.mutationRoot.addColorExternal();
+                break;
             }
         }
     }
     handleAddColor (element) {
         if (this.mutationRoot) {
-            this.mutationRoot.setColour(element.target.value ?? element.target.getAttribute('color'));
+            const colour = element.target.value ?? element.target.getAttribute('color');
+            this.mutationRoot.setProcedureColour(colour);
             this.mutationRoot.updateDisplay_();
-            this.setState({colour: element.target.value ?? element.target.getAttribute('color')});
+            this.setState({colour});
         }
     }
     handleToggleWarp () {

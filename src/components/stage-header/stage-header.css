@@ -8,10 +8,19 @@
     top: 0;
 }
 [dir="ltr"] .stage-header-wrapper {
-    right: 0;
+    left: 0;
 }
 [dir="rtl"] .stage-header-wrapper {
+    right: 0;
+}
+
+[dir="ltr"] .stage-header-wrapper:has(.stage-hidden) {
+    right: 0;
+    left: unset;
+}
+[dir="rtl"] .stage-header-wrapper:has(.stage-hidden) {
     left: 0;
+    right: unset;
 }
 
 .stage-header-wrapper-overlay {
@@ -56,15 +65,39 @@
 }
 
 [dir="ltr"] .stage-size-toggle-group,
-[dir="ltr"] .settings-button, 
+[dir="ltr"] .settings-button,
 [dir="ltr"] .debugger-button {
     margin-right: .2rem;
 }
 
 [dir="rtl"] .stage-size-toggle-group,
-[dir="rtl"] .settings-button, 
+[dir="rtl"] .settings-button,
 [dir="rtl"] .debugger-button {
     margin-left: .2rem;
+}
+
+.debugger-button, .debugger-button * {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.log-count {
+    display: block;
+    position: absolute;
+    top: -.55rem;
+    right: -.55rem;
+    border-radius: 1rem;
+    background-color: $looks-secondary;
+    padding: 0 .25rem;
+    text-indent: 0;
+    line-height: 1rem;
+    color: #fff;
+    font-size: .7rem;
+    font-weight: bold;
+    pointer-events: none;
 }
 
 .stage-button {

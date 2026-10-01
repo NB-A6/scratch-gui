@@ -186,10 +186,12 @@ const mapStateToProps = state => {
         editorSettingsModalVisible: state.scratchGui.modals.editorSettingsModal,
         extensionManagerModalVisible: state.scratchGui.modals.extensionManagerModal,
         inspectBlockModalVisible: state.scratchGui.modals.inspectBlockModal,
+        inspectThreadModalVisible: state.scratchGui.modals.inspectThreadModal,
         fontsModalVisible: state.scratchGui.modals.fontsModal,
         unknownPlatformModalVisible: state.scratchGui.modals.unknownPlatformModal,
         invalidProjectModalVisible: state.scratchGui.modals.invalidProjectModal,
         variablesTabVisible: activeTabIndex === VARIABLES_TAB_INDEX,
+        gitModalVisible: state.scratchGui.modals.gitModal,
         vm: state.scratchGui.vm
     };
 };

@@ -1,4 +1,5 @@
-import React, {useState, useMemo} from 'react';
+import React, {useState, useMemo, useEffect, useRef} from 'react';
+import PropTypes from 'prop-types';
 import classNames from 'classnames';
 import styles from './logs.css';
 
@@ -9,105 +10,187 @@ import downloadIcon from './icons/icon--download.svg';
 import warningIcon from './icons/icon--warning.svg';
 import errorIcon from './icons/icon--error.svg';
 
-const parseLogMessage = message => {
-    try {
-        const parsed = JSON.parse(message);
-        if (parsed && typeof parsed === 'object' && '__COLOR' in parsed) {
-            const { __COLOR, message } = parsed;
-            const color = `rgba(${__COLOR.r},${__COLOR.g},${__COLOR.b},1)`;
-            return { display: message, color };
-        }
-    } catch {}
-    return { display: message, color: null };
+const parseLogColor = color => {
+    if (!color) return null;
+    return `rgba(${color.r},${color.g},${color.b},1)`;
 };
 
-const handleExportLogs = logs => {
+const handleExportLogs = (logs, projectTitle) => {
     let exported = '';
     logs.forEach(log => {
         const type = (log.type || 'log').toUpperCase();
+        const typeMap = {
+            LOG: "LOG",
+            WARN: "WRN",
+            ERROR: "ERR"
+        };
         if (log.target) {
-            exported += `${log.target.sprite.name}: [${type}] ${log.message}\n`;
+            exported += `[${typeMap[type]}] ${log.target.sprite.name}: ${log.message}\n`;
         } else {
-            exported += `[${type}] ${log.message}\n`;
+            exported += `[${typeMap[type]}] ${log.message}\n`;
         }
     });
 
-    const blob = new Blob([exported], { type: 'text/plain' });
-    downloadBlob('logs.txt', blob);
+    const blob = new Blob([exported], {type: 'text/plain'});
+    downloadBlob(`${(projectTitle).substring(0, 100)}.log`, blob);
 };
 
 const Log = React.memo(props => {
     const icon = props.type === 'warn' ? warningIcon : errorIcon;
-    const { display, color } = parseLogMessage(props.message);
+    const color = parseLogColor(props.color);
     const colorStyle = color ? {
-        color,
-        backgroundColor:   color.replace(',1)',',0.15)'),
-        borderBottomColor: color.replace(',1)',',0.30)')
-    } : undefined;
+        backgroundColor: color.replace(',1)', ',0.15)'),
+        borderBottomColor: color.replace(',1)', ',0.30)')
+    } : null;
+    let message = props.message;
+    if ((message.startsWith("[") && message.endsWith("]")) || (message.startsWith("{") && message.endsWith("}"))) {
+        try {
+            message = <pre>{JSON.stringify(JSON.parse(props.message), null, 2)}</pre>;
+        } catch {}
+    }
     return (
-        <div className={classNames(styles.log, styles[props.type])} style={colorStyle}>
+        <div
+            className={classNames(styles.log, styles[props.type])}
+            style={colorStyle}
+        >
             {props.type && props.type !== 'log' &&
                 <img src={icon} />
             }
-            <span style={color ? { color } : undefined}>{display}</span>
+            <span>{message}</span>
             {props.target &&
-                <a className={styles.spriteName} onClick={props.onSelectTarget}>
+                <a
+                    className={styles.spriteName}
+                    onClick={props.onSelectTarget}
+                >
                     {props.target.sprite.name}
                 </a>
+            }
+            {props.targetBlock &&
+                <span className={styles.targetBlockName}>
+                    <span>{':'}</span>
+                    <a
+                        onClick={props.onSelectTargetBlock}
+                        title={props.targetBlock}
+                    >
+                        {props.targetBlock.substring(0, 5)}{'…'}
+                    </a>
+                </span>
             }
         </div>
     );
 });
 
+Log.propTypes = {
+    type: PropTypes.string,
+    message: PropTypes.string,
+    color: PropTypes.shape({
+        r: PropTypes.number,
+        g: PropTypes.number,
+        b: PropTypes.number
+    }),
+    target: PropTypes.shape({
+        sprite: PropTypes.shape({
+            name: PropTypes.string
+        })
+    }),
+    targetBlock: PropTypes.string,
+    onSelectTarget: PropTypes.func,
+    onSelectTargetBlock: PropTypes.func
+};
+
+Log.displayName = 'Log';
+
 const LogsTab = React.memo(props => {
     const [spriteFilter, setSpriteFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
+    const [stringFilter, setStringFilter] = useState('');
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const containerRef = useRef(null);
+
+    const handleScroll = () => {
+        const el = containerRef.current;
+        if (!el) return;
+        const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setIsAtBottom(distanceFromBottom < 50);
+    };
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        el.addEventListener('scroll', handleScroll);
+        return () => el.removeEventListener('scroll', handleScroll);
+    }, []);
 
     const sprites = Object.values(props.sprites)
-        .sort((a, b) => a.order - b.order).map(s => s.name);
+        .sort((a, b) => a.order - b.order)
+        .map(s => s.name);
 
-    const filteredLogs = useMemo(() => {
-        return props.logs.filter(log => {
-            const spriteMatch = spriteFilter === 'all' ||
-                (log.target && log.target.sprite.name === spriteFilter) ||
-                (spriteFilter === '__stage__' && log.target && log.target.isStage);
-            const typeMatch = typeFilter === 'all' || (log.type || 'log') === typeFilter;
-            return spriteMatch && typeMatch;
-        });
-    }, [props.logs, spriteFilter, typeFilter]);
+    const filteredLogs = useMemo(() => props.logs.filter(log => {
+        const spriteMatch = spriteFilter === 'all' ||
+            (log.target && log.target.sprite.name === spriteFilter) ||
+            (spriteFilter === '__stage__' && log.target && log.target.isStage);
+        const typeMatch = typeFilter === 'all' || (log.type || 'log') === typeFilter;
+        const stringMatch = log.message.toLowerCase().includes(stringFilter.toLowerCase());
+        return spriteMatch && typeMatch && stringMatch;
+    }), [props.logs, spriteFilter, typeFilter, stringFilter]);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (el && isAtBottom) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [filteredLogs, isAtBottom]);
 
     return (
-        <div className={styles.container}>
+        <div
+            className={styles.container}
+            ref={containerRef}
+        >
             <div className={styles.buttonContainer}>
                 <button onClick={props.onClearLogs}>
                     <img src={deleteIcon} />
-                    <span>Clear</span>
+                    <span>{'Clear'}</span>
                 </button>
-                <button onClick={() => handleExportLogs(props.logs)}>
+                {/* eslint-disable-next-line react/jsx-no-bind */}
+                <button onClick={() => handleExportLogs(filteredLogs, props.projectTitle)}>
                     <img src={downloadIcon} />
-                    <span>Export</span>
+                    <span>{'Export'}</span>
                 </button>
                 <select
                     className={styles.filterSelect}
                     value={spriteFilter}
+                    // eslint-disable-next-line react/jsx-no-bind
                     onChange={e => setSpriteFilter(e.target.value)}
                 >
-                    <option value="all">All sprites</option>
+                    <option value="all">{'All sprites'}</option>
                     {sprites.map((name, i) => (
-                        <option key={i} value={name}>{name}</option>
+                        <option
+                            key={i}
+                            value={name}
+                        >
+                            {name}
+                        </option>
                     ))}
-                    <option value="__stage__">Stage</option>
+                    <option value="__stage__">{'Stage'}</option>
                 </select>
                 <select
                     className={styles.filterSelect}
                     value={typeFilter}
+                    // eslint-disable-next-line react/jsx-no-bind
                     onChange={e => setTypeFilter(e.target.value)}
                 >
-                    <option value="all">All types</option>
-                    <option value="log">Log</option>
-                    <option value="warn">Warn</option>
-                    <option value="error">Error</option>
+                    <option value="all">{'All types'}</option>
+                    <option value="log">{'Log'}</option>
+                    <option value="warn">{'Warn'}</option>
+                    <option value="error">{'Error'}</option>
                 </select>
+                <input
+                    className={styles.search}
+                    type="search"
+                    value={stringFilter}
+                    onChange={e => setStringFilter(e.target.value)}
+                    placeholder="Search logs"
+                />
             </div>
             {filteredLogs.length > 0 ? filteredLogs.map((log, i) => (
                 <Log
@@ -115,13 +198,29 @@ const LogsTab = React.memo(props => {
                     type={log.type}
                     message={log.message}
                     target={log.target}
+                    color={log.color}
+                    targetBlock={log.targetBlock}
+                    // eslint-disable-next-line react/jsx-no-bind
                     onSelectTarget={() => props.onSelectTarget(log.target)}
+                    // eslint-disable-next-line react/jsx-no-bind
+                    onSelectTargetBlock={() => props.onSelectTargetBlock(log.target, log.targetBlock)}
                 />
             )) : (
-                <h3 className={styles.noLogs}>No logs to display</h3>
+                <span className={styles.noLogs}>{'No logs to display'}</span>
             )}
         </div>
     );
 });
+
+LogsTab.propTypes = {
+    logs: PropTypes.array,
+    sprites: PropTypes.object,
+    onClearLogs: PropTypes.func,
+    onSelectTarget: PropTypes.func,
+    onSelectTargetBlock: PropTypes.func,
+    projectTitle: PropTypes.string
+};
+
+LogsTab.displayName = 'LogsTab';
 
 export default LogsTab;

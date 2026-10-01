@@ -38,13 +38,16 @@ import NBCustomAccentModal from '../../containers/nb-custom-accent-modal.jsx';
 import NBDebugger from '../../containers/nb-debugger.jsx';
 import NBEditorSettingsModal from '../../containers/nb-editor-settings-modal.jsx';
 import NBExtensionManagerModal from '../../containers/nb-extension-manager-modal.jsx';
+import NBGitModal from '../../containers/nb-git-modal.jsx';
+import NBGitProjectManager from '../../containers/nb-git-project-manager.jsx';
 import NBInspectBlockModal from '../../containers/nb-inspect-block-modal.jsx';
+import NBInspectThreadModal from '../../containers/nb-inspect-thread-modal.jsx';
 import TWRestorePointManager from '../../containers/tw-restore-point-manager.jsx';
 import TWFontsModal from '../../containers/tw-fonts-modal.jsx';
 import TWUnknownPlatformModal from '../../containers/tw-unknown-platform-modal.jsx';
 import TWInvalidProjectModal from '../../containers/tw-invalid-project-modal.jsx';
 
-import {STAGE_SIZE_MODES, FIXED_WIDTH, UNCONSTRAINED_NON_STAGE_WIDTH} from '../../lib/layout-constants';
+import {FIXED_WIDTH, UNCONSTRAINED_NON_STAGE_WIDTH} from '../../lib/layout-constants';
 import {Theme} from '../../lib/themes';
 
 import {isRendererSupported, isBrowserSupported} from '../../lib/tw-environment-support-prober';
@@ -92,7 +95,7 @@ const GUIComponent = props => {
         basePath,
         backdropLibraryVisible,
         backpackHost,
-        _backpackVisible,
+        backpackVisible: _backpackVisible,
         blocksId,
         blocksTabVisible,
         cardsVisible,
@@ -152,6 +155,7 @@ const GUIComponent = props => {
         onShare,
         onShowPrivacyPolicy,
         onStartSelectingFileUpload,
+        onStartSelectingGitProject,
         onTelemetryModalCancel,
         onTelemetryModalOptIn,
         onTelemetryModalOptOut,
@@ -170,10 +174,12 @@ const GUIComponent = props => {
         editorSettingsModalVisible,
         extensionManagerModalVisible,
         inspectBlockModalVisible,
+        inspectThreadModalVisible,
         fontsModalVisible,
         unknownPlatformModalVisible,
         invalidProjectModalVisible,
         variablesTabVisible,
+        gitModalVisible,
         vm,
         ...componentProps
     } = omit(props, 'dispatch');
@@ -237,15 +243,18 @@ const GUIComponent = props => {
             <React.Fragment>
                 <TWSecurityManager securityManager={securityManager} />
                 <TWRestorePointManager />
+                <NBGitProjectManager />
                 {settingsModalVisible && <TWSettingsModal />}
                 {customExtensionModalVisible && <TWCustomExtensionModal />}
                 {customAccentModalVisible && <NBCustomAccentModal />}
                 {editorSettingsModalVisible && <NBEditorSettingsModal />}
                 {extensionManagerModalVisible && <NBExtensionManagerModal />}
                 {inspectBlockModalVisible && <NBInspectBlockModal />}
+                {inspectThreadModalVisible && <NBInspectThreadModal />}
                 {fontsModalVisible && <TWFontsModal />}
                 {unknownPlatformModalVisible && <TWUnknownPlatformModal />}
                 {invalidProjectModalVisible && <TWInvalidProjectModal />}
+                {gitModalVisible && <NBGitModal />}
             </React.Fragment>
         );
 
@@ -269,7 +278,7 @@ const GUIComponent = props => {
                     isRendererSupported={isRendererSupported()}
                     isRtl={isRtl}
                     loading={loading}
-                    stageSize={STAGE_SIZE_MODES.full}
+                    stageSize={FIXED_WIDTH}
                     setStageSize={setStageSize}
                     preferences={props.preferences}
                     vm={vm}
@@ -285,8 +294,6 @@ const GUIComponent = props => {
                 className={styles.pageWrapper}
                 dir={isRtl ? 'rtl' : 'ltr'}
                 style={{
-                    minWidth: 1024 + Math.max(0, customStageSize.width - 480),
-                    minHeight: 640 + Math.max(0, customStageSize.height - 360),
                     cursor: resizingStage ? 'e-resize' : null
                 }}
                 // eslint-disable-next-line react/jsx-no-bind
@@ -299,7 +306,7 @@ const GUIComponent = props => {
                         event.clientX - 14 :
                         document.body.offsetWidth - event.clientX - 14;
                     if (width < 100) width = 0;
-                    else width = Math.max(Math.min(width, 800), 270);
+                    else width = Math.max(Math.min(width, window.innerWidth - 616), 270);
                     setStageSize(width);
                 })()}
                 {...componentProps}
@@ -397,6 +404,7 @@ const GUIComponent = props => {
                     onSeeCommunity={onSeeCommunity}
                     onShare={onShare}
                     onStartSelectingFileUpload={onStartSelectingFileUpload}
+                    onStartSelectingGitProject={onStartSelectingGitProject}
                     onToggleLoginOpen={onToggleLoginOpen}
                 />
                 <Box className={styles.bodyWrapper}>
@@ -679,6 +687,7 @@ GUIComponent.propTypes = {
     onShare: PropTypes.func,
     onShowPrivacyPolicy: PropTypes.func,
     onStartSelectingFileUpload: PropTypes.func,
+    onStartSelectingGitProject: PropTypes.func,
     onTabSelect: PropTypes.func,
     onTelemetryModalCancel: PropTypes.func,
     onTelemetryModalOptIn: PropTypes.func,
@@ -701,10 +710,12 @@ GUIComponent.propTypes = {
     editorSettingsModalVisible: PropTypes.bool,
     extensionManagerModalVisible: PropTypes.bool,
     inspectBlockModalVisible: PropTypes.bool,
+    inspectThreadModalVisible: PropTypes.bool,
     fontsModalVisible: PropTypes.bool,
     unknownPlatformModalVisible: PropTypes.bool,
     invalidProjectModalVisible: PropTypes.bool,
     variablesTabVisible: PropTypes.bool,
+    gitModalVisible: PropTypes.bool,
     vm: PropTypes.instanceOf(VM).isRequired
 };
 GUIComponent.defaultProps = {

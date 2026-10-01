@@ -19,8 +19,10 @@ const MODAL_FONTS = 'fontsModal';
 const MODAL_UNKNOWN_PLATFORM = 'unknownPlatformModal';
 const MODAL_INVALID_PROJECT = 'invalidProjectModal';
 const MODAL_CUSTOM_ACCENT = 'customAccentModal';
+const MODAL_GIT = 'gitModal';
 const MODAL_EDITOR_SETTINGS = 'editorSettingsModal';
 const MODAL_INSPECT_BLOCK = 'inspectBlockModal';
+const MODAL_INSPECT_THREAD = 'inspectThreadModal';
 
 const initialState = {
     [MODAL_BACKDROP_LIBRARY]: false,
@@ -41,10 +43,13 @@ const initialState = {
     [MODAL_UNKNOWN_PLATFORM]: false,
     [MODAL_INVALID_PROJECT]: false,
     [MODAL_CUSTOM_ACCENT]: false,
+    [MODAL_GIT]: false,
     [MODAL_EDITOR_SETTINGS]: false,
     [MODAL_INSPECT_BLOCK]: false,
+    [MODAL_INSPECT_THREAD]: false,
     editorSettingsModalTab: 0,
-    inspectBlockModalBlock: null
+    inspectBlockModalBlock: null,
+    inspectThreadModalThread: null
 };
 
 const reducer = function (state, action) {
@@ -58,6 +63,9 @@ const reducer = function (state, action) {
             }),
             ...(action.modal === MODAL_INSPECT_BLOCK && {
                 inspectBlockModalBlock: action.block
+            }),
+            ...(action.modal === MODAL_INSPECT_THREAD && {
+                inspectThreadModalThread: action.thread
             })
         });
     case CLOSE_MODAL:
@@ -134,6 +142,9 @@ const openInvalidProjectModal = function () {
 const openCustomAccentModal = function () {
     return openModal(MODAL_CUSTOM_ACCENT);
 };
+const openGitModal = function () {
+    return openModal(MODAL_GIT);
+};
 const openEditorSettingsModal = function (tab = 0) {
     return {
         type: OPEN_MODAL,
@@ -146,6 +157,13 @@ const openInspectBlockModal = function (block) {
         type: OPEN_MODAL,
         modal: MODAL_INSPECT_BLOCK,
         block
+    };
+};
+const openInspectThreadModal = function (thread) {
+    return {
+        type: OPEN_MODAL,
+        modal: MODAL_INSPECT_THREAD,
+        thread
     };
 };
 const closeBackdropLibrary = function () {
@@ -202,11 +220,17 @@ const closeInvalidProjectModal = function () {
 const closeCustomAccentModal = function () {
     return closeModal(MODAL_CUSTOM_ACCENT);
 };
+const closeGitModal = function () {
+    return closeModal(MODAL_GIT);
+};
 const closeEditorSettingsModal = function () {
     return closeModal(MODAL_EDITOR_SETTINGS);
 };
 const closeInspectBlockModal = function () {
     return closeModal(MODAL_INSPECT_BLOCK);
+};
+const closeInspectThreadModal = function () {
+    return closeModal(MODAL_INSPECT_THREAD);
 };
 export {
     reducer as default,
@@ -229,8 +253,10 @@ export {
     openUnknownPlatformModal,
     openInvalidProjectModal,
     openCustomAccentModal,
+    openGitModal,
     openEditorSettingsModal,
     openInspectBlockModal,
+    openInspectThreadModal,
     closeBackdropLibrary,
     closeCostumeLibrary,
     closeExtensionLibrary,
@@ -249,6 +275,8 @@ export {
     closeUnknownPlatformModal,
     closeInvalidProjectModal,
     closeCustomAccentModal,
+    closeGitModal,
     closeEditorSettingsModal,
-    closeInspectBlockModal
+    closeInspectBlockModal,
+    closeInspectThreadModal
 };

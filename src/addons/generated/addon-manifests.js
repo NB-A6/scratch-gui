@@ -25,7 +25,6 @@ import _2d_color_picker from "../addons/2d-color-picker/_manifest_entry.js";
 //import _paint_skew from "../addons/paint-skew/_manifest_entry.js";
 import _better_img_uploads from "../addons/better-img-uploads/_manifest_entry.js";
 import _pick_colors_from_stage from "../addons/pick-colors-from-stage/_manifest_entry.js";
-import _custom_block_shape from "../addons/custom-block-shape/_manifest_entry.js";
 import _editor_square_inputs from "../addons/editor-square-inputs/_manifest_entry.js";
 import _zebra_striping from "../addons/zebra-striping/_manifest_entry.js";
 import _editor_compact from "../addons/editor-compact/_manifest_entry.js";
@@ -36,7 +35,6 @@ import _editor_colored_context_menus from "../addons/editor-colored-context-menu
 import _editor_buttons_reverse_order from "../addons/editor-buttons-reverse-order/_manifest_entry.js";
 //import _variable_manager from "../addons/variable-manager/_manifest_entry.js";
 import _search_sprites from "../addons/search-sprites/_manifest_entry.js";
-import _sprite_properties from "../addons/sprite-properties/_manifest_entry.js";
 import _gamepad from "../addons/gamepad/_manifest_entry.js";
 import _editor_sounds from "../addons/editor-sounds/_manifest_entry.js";
 import _load_extensions from "../addons/load-extensions/_manifest_entry.js";
@@ -95,7 +93,6 @@ export default {
   //"paint-skew": _paint_skew,
   "better-img-uploads": _better_img_uploads,
   "pick-colors-from-stage": _pick_colors_from_stage,
-  "custom-block-shape": _custom_block_shape,
   "editor-square-inputs": _editor_square_inputs,
   "zebra-striping": _zebra_striping,
   "editor-compact": _editor_compact,
@@ -106,7 +103,6 @@ export default {
   "editor-buttons-reverse-order": _editor_buttons_reverse_order,
   //"variable-manager": _variable_manager,
   "search-sprites": _search_sprites,
-  "sprite-properties": _sprite_properties,
   "gamepad": _gamepad,
   "editor-sounds": _editor_sounds,
   "load-extensions": _load_extensions,

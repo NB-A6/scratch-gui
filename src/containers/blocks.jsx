@@ -7,6 +7,7 @@ import React from 'react';
 import {intlShape, injectIntl, defineMessages} from 'react-intl';
 import VMScratchBlocks from '../lib/blocks';
 import VM from 'scratch-vm';
+import blockMessages from 'scratch-l10n/locales/blocks-msgs';
 
 import log from '../lib/log.js';
 import Prompt from './prompt.jsx';
@@ -15,12 +16,13 @@ import ExtensionLibrary from './extension-library.jsx';
 import extensionData from '../lib/libraries/extensions/index.jsx';
 import CustomProcedures from './custom-procedures.jsx';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
-import {BLOCKS_DEFAULT_SCALE, STAGE_DISPLAY_SIZES} from '../lib/layout-constants';
+import {BLOCKS_DEFAULT_SCALE} from '../lib/layout-constants';
 import DropAreaHOC from '../lib/drop-area-hoc.jsx';
 import DragConstants from '../lib/drag-constants';
 import defineDynamicBlock from '../lib/define-dynamic-block';
 import {Theme} from '../lib/themes';
 import {injectExtensionBlockTheme, injectExtensionCategoryTheme} from '../lib/themes/blockHelpers';
+import {applyBlockShapeAndUpdate, getBlockShape, updateAllBlocks} from '../lib/nb-custom-block-shape';
 
 import {connect} from 'react-redux';
 import {updateToolbox} from '../reducers/toolbox';
@@ -126,8 +128,11 @@ class Blocks extends React.Component {
             'onWorkspaceMetricsChange',
             'setBlocks',
             'setLocale',
-            'onExtensionAPI'
+            'onExtensionAPI',
+            'applyBlockShapeToWorkspace',
+            'handleBlockShapeChange'
         ]);
+        this.ScratchBlocks.FieldExtendable.ARROWS_LEFT = this.props.extendableArrowsLeft;
         this.ScratchBlocks.prompt = this.handlePromptStart;
         this.ScratchBlocks.statusButtonCallback = this.handleConnectionModalStart;
         this.ScratchBlocks.recordSoundCallback = this.handleOpenSoundRecorder;
@@ -141,6 +146,7 @@ class Blocks extends React.Component {
     }
     componentDidMount () {
         this.ScratchBlocks = VMScratchBlocks(this.props.vm, this.props.useCatBlocks);
+        this.ScratchBlocks.FieldExtendable.ARROWS_LEFT = this.props.extendableArrowsLeft;
         this.ScratchBlocks.prompt = this.handlePromptStart;
         this.ScratchBlocks.statusButtonCallback = this.handleConnectionModalStart;
         this.ScratchBlocks.recordSoundCallback = this.handleOpenSoundRecorder;
@@ -149,6 +155,14 @@ class Blocks extends React.Component {
         this.ScratchBlocks.FieldColourSlider.activateEyedropper_ = this.props.onActivateColorPicker;
         this.ScratchBlocks.Procedures.externalProcedureDefCallback = this.props.onActivateCustomProcedures;
         this.ScratchBlocks.ScratchMsgs.setLocale(this.props.locale);
+        this.ScratchBlocks.LABEL_CONTRAST_THRESHOLD = this.getLabelContrastThreshold();
+        const customColourConverters = this.props.theme.getCustomExtensionColors();
+        this.ScratchBlocks.CustomProcedureColourTransform = customColourConverters.primary ? primary => [
+            customColourConverters.primary(primary),
+            customColourConverters.secondary(primary),
+            customColourConverters.tertiary(primary),
+            customColourConverters.quaternary(primary)
+        ] : null;
 
         const Msg = this.ScratchBlocks.Msg;
         Msg.PROCEDURES_RETURN = this.props.intl.formatMessage(messages.PROCEDURES_RETURN, {
@@ -237,6 +251,9 @@ class Blocks extends React.Component {
             this.handleExtensionAdded(category);
         }
 
+        // Apply the native custom block shape at startup
+        this.applyBlockShapeToWorkspace(this.props.blockShape);
+
         gentlyRequestPersistentStorage();
     }
     shouldComponentUpdate (nextProps, nextState) {
@@ -252,12 +269,25 @@ class Blocks extends React.Component {
             this.props.customStageSize !== nextProps.customStageSize ||
             this.props.hiddenCategories !== nextProps.hiddenCategories ||
             this.props.nbBlocks !== nextProps.nbBlocks ||
-            this.props.disableInspectBlock !== nextProps.disableInspectBlock
+            this.props.disableInspectBlock !== nextProps.disableInspectBlock ||
+            this.props.blockShape !== nextProps.blockShape ||
+            this.props.labelContrastThreshold !== nextProps.labelContrastThreshold ||
+            this.props.extendableArrowsLeft !== nextProps.extendableArrowsLeft
         );
     }
     componentDidUpdate (prevProps) {
         if (this.workspace && this.props.disableInspectBlock !== prevProps.disableInspectBlock) {
             this.workspace.options.disableInspectBlock = this.props.disableInspectBlock;
+        }
+        if (this.props.blockShape !== prevProps.blockShape) {
+            this.handleBlockShapeChange(this.props.blockShape);
+        }
+        if (this.props.extendableArrowsLeft !== prevProps.extendableArrowsLeft) {
+            this.ScratchBlocks.FieldExtendable.ARROWS_LEFT = this.props.extendableArrowsLeft;
+            updateAllBlocks(this.ScratchBlocks, this.props.vm, this.workspace);
+        }
+        if (this.props.labelContrastThreshold !== prevProps.labelContrastThreshold) {
+            this.applyLabelContrastThreshold();
         }
         // If any modals are open, call hideChaff to close z-indexed field editors
         if (this.props.anyModalVisible && !prevProps.anyModalVisible) {
@@ -318,6 +348,30 @@ class Blocks extends React.Component {
 
         AddonHooks.blocklyWorkspace = null;
     }
+    applyBlockShapeToWorkspace (blockShape) {
+        if (!this.workspace || !this.props.vm) {
+            return;
+        }
+        const shape = blockShape || getBlockShape(this.props.preferences);
+        applyBlockShapeAndUpdate(this.ScratchBlocks, this.props.vm, this.workspace, shape);
+    }
+    getLabelContrastThreshold () {
+        const threshold = this.props.labelContrastThreshold;
+        if (threshold === null || threshold === (void 0) || !Number.isFinite(threshold)) {
+            return 190;
+        }
+        return Math.max(0, Math.min(255, threshold));
+    }
+    applyLabelContrastThreshold () {
+        this.ScratchBlocks.LABEL_CONTRAST_THRESHOLD = this.getLabelContrastThreshold();
+        if (this.workspace) {
+            // Re-render all blocks in the workspace and flyout so the label colour updates.
+            updateAllBlocks(this.ScratchBlocks, this.props.vm, this.workspace);
+        }
+    }
+    handleBlockShapeChange (nextBlockShape) {
+        this.applyBlockShapeToWorkspace(nextBlockShape);
+    }
     requestToolboxUpdate () {
         clearTimeout(this.toolboxUpdateTimeout);
         this.toolboxUpdateTimeout = setTimeout(() => {
@@ -325,6 +379,11 @@ class Blocks extends React.Component {
         }, 0);
     }
     setLocale () {
+        const localeMessages = blockMessages[this.props.locale];
+        if (localeMessages) {
+            const locales = this.ScratchBlocks.ScratchMsgs.locales;
+            locales[this.props.locale] = Object.assign({}, locales[this.props.locale], localeMessages);
+        }
         this.ScratchBlocks.ScratchMsgs.setLocale(this.props.locale);
         this.props.vm.setLocale(this.props.locale, this.props.messages)
             .then(() => {
@@ -724,6 +783,8 @@ class Blocks extends React.Component {
             customStageSize,
             customProceduresVisible,
             extensionLibraryVisible,
+            hiddenCategories,
+            nbBlocks,
             options,
             stageSize,
             vm,
@@ -733,6 +794,7 @@ class Blocks extends React.Component {
             onOpenConnectionModal,
             onOpenSoundRecorder,
             onOpenCustomExtensionModal,
+            onInspectBlock,
             reduxOnOpenCustomExtensionModal,
             updateToolboxState,
             onActivateCustomProcedures,
@@ -741,6 +803,8 @@ class Blocks extends React.Component {
             toolboxXML,
             updateMetrics: updateMetricsProp,
             useCatBlocks,
+            disableInspectBlock,
+            extendableArrowsLeft,
             workspaceMetrics,
             ...props
         } = this.props;
@@ -802,6 +866,7 @@ Blocks.propTypes = {
     isVisible: PropTypes.bool,
     locale: PropTypes.string.isRequired,
     messages: PropTypes.objectOf(PropTypes.string),
+    nbBlocks: PropTypes.bool,
     onActivateColorPicker: PropTypes.func,
     onActivateCustomProcedures: PropTypes.func,
     onOpenConnectionModal: PropTypes.func,
@@ -832,7 +897,17 @@ Blocks.propTypes = {
     workspaceMetrics: PropTypes.shape({
         targets: PropTypes.objectOf(PropTypes.object)
     }),
-    hiddenCategories: PropTypes.arrayOf(PropTypes.string)
+    hiddenCategories: PropTypes.arrayOf(PropTypes.string),
+    preferences: PropTypes.object,
+    blockShape: PropTypes.shape({
+        paddingSize: PropTypes.number,
+        cornerSize: PropTypes.number,
+        maxCornerRadius: PropTypes.number,
+        notchSize: PropTypes.number,
+        fieldHeight: PropTypes.number
+    }),
+    labelContrastThreshold: PropTypes.number,
+    extendableArrowsLeft: PropTypes.bool
 };
 
 Blocks.defaultOptions = {
@@ -871,9 +946,13 @@ const mapStateToProps = state => ({
     customProceduresVisible: state.scratchGui.customProcedures.active,
     workspaceMetrics: state.scratchGui.workspaceMetrics,
     useCatBlocks: isTimeTravel2020(state),
+    preferences: state.scratchGui.preferences,
+    blockShape: state.scratchGui.preferences['block-shape'],
+    labelContrastThreshold: state.scratchGui.preferences['label-contrast-threshold'],
     hiddenCategories: state.scratchGui.preferences['hidden-categories'],
     nbBlocks: !(state.scratchGui.preferences['hide-nb-blocks'] === true),
-    disableInspectBlock: state.scratchGui.preferences['disable-inspect-block'] === true
+    disableInspectBlock: state.scratchGui.preferences['disable-inspect-block'] === true,
+    extendableArrowsLeft: state.scratchGui.preferences['extendable-arrows-left'] === true
 });
 
 const mapDispatchToProps = dispatch => ({
